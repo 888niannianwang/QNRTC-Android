@@ -12,6 +12,7 @@ import android.support.annotation.Nullable;
 import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
 import android.text.Html;
+import android.util.Log;
 import android.view.View;
 import android.view.WindowManager;
 import android.widget.EditText;
@@ -21,18 +22,25 @@ import android.widget.RadioGroup;
 import com.bugsnag.android.Bugsnag;
 import com.qiniu.droid.rtc.QNScreenCaptureUtil;
 import com.qiniu.droid.rtc.demo.R;
+import com.qiniu.droid.rtc.demo.event.TaskEvent;
 import com.qiniu.droid.rtc.demo.model.ProgressEvent;
+import com.qiniu.droid.rtc.demo.model.TestField;
 import com.qiniu.droid.rtc.demo.model.UpdateInfo;
 import com.qiniu.droid.rtc.demo.model.UserList;
 import com.qiniu.droid.rtc.demo.service.DownloadService;
+import com.qiniu.droid.rtc.demo.service.TaskScheduleService;
 import com.qiniu.droid.rtc.demo.utils.Config;
+import com.qiniu.droid.rtc.demo.utils.EventBusBase;
 import com.qiniu.droid.rtc.demo.utils.QNAppServer;
 import com.qiniu.droid.rtc.demo.utils.ToastUtils;
 import com.qiniu.droid.rtc.demo.utils.Utils;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.regex.Pattern;
 
 import de.greenrobot.event.EventBus;
+
 
 public class MainActivity extends AppCompatActivity {
     private static final int USERNAME_REQUEST_CODE = 0;
@@ -43,11 +51,14 @@ public class MainActivity extends AppCompatActivity {
     private RadioButton mScreenCapture;
     private RadioButton mCameraCapture;
     private RadioButton mOnlyAudioCapture;
+    private List<TestField> testFields = new ArrayList<>();
 
     private String mUserName;
     private String mRoomName;
     private boolean mIsScreenCaptureEnabled;
     private int mCaptureMode = 0;
+    private static String ACTION_INPUT_ROOM_NAME = "com.qiniu.droid.rtc.demo.activity.MainActivity.InputRoomName";
+    private static String ACTION_JOIN_ROOM = "com.qiniu.droid.rtc.demo.activity.MainActivity.JoinConference";
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
@@ -57,6 +68,7 @@ public class MainActivity extends AppCompatActivity {
         }
         Bugsnag.init(this);
         EventBus.getDefault().registerSticky(this);
+        EventBusBase.getInstance().register(this);
 
         SharedPreferences preferences = getSharedPreferences(getString(R.string.app_name), Context.MODE_PRIVATE);
         mUserName = preferences.getString(Config.USER_NAME, "");
@@ -73,6 +85,7 @@ public class MainActivity extends AppCompatActivity {
     protected void onDestroy() {
         super.onDestroy();
         EventBus.getDefault().unregister(this);
+        EventBusBase.getInstance().unregister(this);
     }
 
     @Override
@@ -245,6 +258,10 @@ public class MainActivity extends AppCompatActivity {
         mRoomEditText.setSelection(roomName.length());
     }
 
+    private void setRoomName(String name){
+        mRoomEditText.setText(name);
+    }
+
     private void checkUpdate() {
         new Thread(new Runnable() {
             @Override
@@ -254,7 +271,7 @@ public class MainActivity extends AppCompatActivity {
                     runOnUiThread(new Runnable() {
                         @Override
                         public void run() {
-                            showUpdateDialog(updateInfo.getDescription(), updateInfo.getDownloadURL());
+                             showUpdateDialog(updateInfo.getDescription(), updateInfo.getDownloadURL());
                         }
                     });
                 }
@@ -316,4 +333,16 @@ public class MainActivity extends AppCompatActivity {
             }
         }
     };
+
+    public void onEventMainThread(TaskEvent e){
+        Log.e("TAG", "EventBus onEventMainThread, event name = " + e.getStep().getStepName());
+        if (ACTION_INPUT_ROOM_NAME.equals(e.getStep().getStepName())) {
+            testFields = e.getStep().getTestFields();
+            setRoomName(testFields.get(0).getFieldValue());
+            Log.e("TAG", "Input room name = " + testFields.get(0).getFieldValue());
+        }else if (ACTION_JOIN_ROOM.equals(e.getStep().getStepName())){
+            onClickConference(e.getView());
+            Log.e("TAG", "Click start conference button");
+        }
+    }
 }
